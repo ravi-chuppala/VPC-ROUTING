@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(gh auth:*)",
+      "Bash(git remote:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:cloudswit.ch)",
+      "WebFetch(domain:introl.com)",
+      "WebFetch(domain:chipsandcheese.com)",
+      "Bash(find:*)",
+      "Bash(go mod:*)",
+      "Bash(go build:*)",
+      "Bash(GOFLAGS=\"\" go build:*)",
+      "Bash(go env:*)",
+      "Bash(go test:*)",
+      "Bash(./dpuctl help:*)",
+      "Bash(./dpuctl phase:*)",
+      "Bash(./dpuctl features:*)",
+      "Bash(./dpuctl intent:*)",
+      "Bash(./dpuctl discover:*)",
+      "Bash(git status:*)",
+      "Bash(git commit:*)",
+      "Bash(git pull:*)"
+    ]
+  }
+}
