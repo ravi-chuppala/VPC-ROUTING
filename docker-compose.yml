@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: vpcinterconnect
+      POSTGRES_USER: vpc
+      POSTGRES_PASSWORD: vpc_dev_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+
+volumes:
+  pgdata:
