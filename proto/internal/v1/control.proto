@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+package internal.v1;
+
+option go_package = "github.com/ravi-chuppala/vpc-routing/proto/internal/v1;controlpb";
+
+// BgpControlService — internal gRPC between controller and BGP service.
+service BgpControlService {
+  rpc ConfigureRT(ConfigureRTRequest) returns (ConfigureRTResponse);
+  rpc InjectRoutes(InjectRoutesRequest) returns (InjectRoutesResponse);
+  rpc WithdrawRoutes(WithdrawRoutesRequest) returns (WithdrawRoutesResponse);
+  rpc GetRouteTable(GetRouteTableRequest) returns (GetRouteTableResponse);
+  rpc GetPeerStatus(GetPeerStatusRequest) returns (GetPeerStatusResponse);
+}
+
+message ConfigureRTRequest {
+  string vpc_id = 1;
+  string vrf_name = 2;
+  string action = 3;  // "add_import" or "remove_import"
+  string route_target = 4;
+}
+
+message ConfigureRTResponse {}
+
+message RouteInfo {
+  string prefix = 1;
+  uint32 vni = 2;
+  string rd = 3;
+  string route_target = 4;
+  string next_hop = 5;
+}
+
+message InjectRoutesRequest {
+  string vpc_id = 1;
+  repeated RouteInfo routes = 2;
+}
+
+message InjectRoutesResponse {
+  int32 injected_count = 1;
+}
+
+message WithdrawRoutesRequest {
+  string vpc_id = 1;
+  repeated string prefixes = 2;
+}
+
+message WithdrawRoutesResponse {
+  int32 withdrawn_count = 1;
+}
+
+message GetRouteTableRequest {
+  string vrf_name = 1;
+}
+
+message RouteTableEntry {
+  string prefix = 1;
+  string next_hop = 2;
+  uint32 vni = 3;
+  string route_target = 4;
+  string state = 5;
+}
+
+message GetRouteTableResponse {
+  repeated RouteTableEntry entries = 1;
+}
+
+message GetPeerStatusRequest {}
+
+message BgpPeerInfo {
+  string address = 1;
+  string state = 2;  // idle, connect, active, opensent, openconfirm, established
+  uint32 asn = 3;
+  int64 uptime_seconds = 4;
+  int64 routes_received = 5;
+  int64 routes_advertised = 6;
+}
+
+message GetPeerStatusResponse {
+  repeated BgpPeerInfo peers = 1;
+}
+
+// AgentControlService — internal gRPC between controller and per-host agent.
+service AgentControlService {
+  rpc ProgramVRF(ProgramVRFRequest) returns (ProgramVRFResponse);
+  rpc DeleteVRF(DeleteVRFRequest) returns (DeleteVRFResponse);
+  rpc ProgramRoutes(ProgramRoutesRequest) returns (ProgramRoutesResponse);
+  rpc ProgramACL(ProgramACLRequest) returns (ProgramACLResponse);
+  rpc ReportRouteStatus(ReportRouteStatusRequest) returns (ReportRouteStatusResponse);
+  rpc GetHostStatus(GetHostStatusRequest) returns (GetHostStatusResponse);
+}
+
+message ProgramVRFRequest {
+  string vrf_name = 1;
+  uint32 table_id = 2;
+  uint32 vni = 3;
+  string vtep_ip = 4;
+}
+
+message ProgramVRFResponse {}
+
+message DeleteVRFRequest {
+  string vrf_name = 1;
+}
+
+message DeleteVRFResponse {}
+
+message AgentRouteEntry {
+  string vrf_name = 1;
+  string prefix = 2;
+  string next_hop = 3;
+  uint32 vni = 4;
+}
+
+message ProgramRoutesRequest {
+  string action = 1;  // "add" or "delete"
+  repeated AgentRouteEntry routes = 2;
+}
+
+message ProgramRoutesResponse {
+  int32 programmed_count = 1;
+}
+
+message ACLRule {
+  string src_prefix = 1;
+  string dst_prefix = 2;
+  string protocol = 3;  // "tcp", "udp", "icmp", "any"
+  int32 src_port_start = 4;
+  int32 src_port_end = 5;
+  int32 dst_port_start = 6;
+  int32 dst_port_end = 7;
+  string action = 8;  // "allow" or "deny"
+}
+
+message ProgramACLRequest {
+  string vrf_name = 1;
+  string peering_id = 2;
+  repeated ACLRule rules = 3;
+}
+
+message ProgramACLResponse {}
+
+message ReportRouteStatusRequest {
+  string vrf_name = 1;
+}
+
+message InstalledRoute {
+  string prefix = 1;
+  string next_hop = 2;
+  string state = 3;  // "installed", "missing", "stale"
+}
+
+message ReportRouteStatusResponse {
+  repeated InstalledRoute routes = 1;
+}
+
+message GetHostStatusRequest {}
+
+message GetHostStatusResponse {
+  string hostname = 1;
+  repeated string vrf_names = 2;
+  int32 route_count = 3;
+  int32 acl_count = 4;
+  bool xdp_supported = 5;
+  bool dpu_detected = 6;
+}

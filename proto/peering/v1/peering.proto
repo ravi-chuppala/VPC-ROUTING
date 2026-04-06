@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+package peering.v1;
+
+option go_package = "github.com/ravi-chuppala/vpc-routing/proto/peering/v1;peeringpb";
+
+import "google/protobuf/timestamp.proto";
+
+service PeeringService {
+  rpc CreatePeering(CreatePeeringRequest) returns (Peering);
+  rpc GetPeering(GetPeeringRequest) returns (Peering);
+  rpc ListPeerings(ListPeeringsRequest) returns (ListPeeringsResponse);
+  rpc UpdatePeering(UpdatePeeringRequest) returns (Peering);
+  rpc DeletePeering(DeletePeeringRequest) returns (DeletePeeringResponse);
+  rpc AcceptPeering(AcceptPeeringRequest) returns (Peering);
+  rpc RejectPeering(RejectPeeringRequest) returns (Peering);
+  rpc ListRoutes(ListRoutesRequest) returns (ListRoutesResponse);
+  rpc OverrideRoute(OverrideRouteRequest) returns (OverrideRouteResponse);
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+}
+
+message RoutePolicy {
+  repeated string allowed_prefixes = 1;
+  repeated string denied_prefixes = 2;
+  int32 max_prefixes = 3;
+  optional int32 bandwidth_limit_mbps = 4;
+}
+
+message Peering {
+  string id = 1;
+  string account_id = 2;
+  string requester_vpc_id = 3;
+  string accepter_vpc_id = 4;
+  string direction = 5;
+  string state = 6;
+  string health = 7;
+  bool cross_region = 8;
+  optional double measured_latency_ms = 9;
+  RoutePolicy route_policy = 10;
+  int32 route_count = 11;
+  google.protobuf.Timestamp created_at = 12;
+  optional google.protobuf.Timestamp provisioned_at = 13;
+}
+
+message CreatePeeringRequest {
+  string requester_vpc_id = 1;
+  string accepter_vpc_id = 2;
+  string direction = 3;
+  RoutePolicy route_policy = 4;
+}
+
+message GetPeeringRequest {
+  string peering_id = 1;
+}
+
+message ListPeeringsRequest {
+  string vpc_id = 1;
+  string state = 2;
+  string page_token = 3;
+  int32 page_size = 4;
+}
+
+message ListPeeringsResponse {
+  repeated Peering peerings = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message UpdatePeeringRequest {
+  string peering_id = 1;
+  optional string direction = 2;
+  RoutePolicy route_policy = 3;
+}
+
+message DeletePeeringRequest {
+  string peering_id = 1;
+}
+
+message DeletePeeringResponse {}
+
+message AcceptPeeringRequest {
+  string peering_id = 1;
+}
+
+message RejectPeeringRequest {
+  string peering_id = 1;
+}
+
+message RouteEntry {
+  string prefix = 1;
+  string origin_vpc_id = 2;
+  string state = 3;
+  string origin = 4;
+  string next_hop = 5;
+  int32 preference = 6;
+}
+
+message ListRoutesRequest {
+  string peering_id = 1;
+}
+
+message ListRoutesResponse {
+  repeated RouteEntry routes = 1;
+  int32 total_count = 2;
+}
+
+message OverrideRouteRequest {
+  string peering_id = 1;
+  string action = 2;  // "add_static" or "withdraw"
+  string prefix = 3;
+}
+
+message OverrideRouteResponse {}
+
+message PeeringEvent {
+  string id = 1;
+  string peering_id = 2;
+  string type = 3;
+  string message = 4;
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+message ListEventsRequest {
+  string peering_id = 1;
+  string page_token = 2;
+  int32 page_size = 3;
+}
+
+message ListEventsResponse {
+  repeated PeeringEvent events = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}

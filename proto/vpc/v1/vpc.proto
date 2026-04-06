@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package vpc.v1;
+
+option go_package = "github.com/ravi-chuppala/vpc-routing/proto/vpc/v1;vpcpb";
+
+import "google/protobuf/timestamp.proto";
+
+service VpcService {
+  rpc CreateVpc(CreateVpcRequest) returns (Vpc);
+  rpc GetVpc(GetVpcRequest) returns (Vpc);
+  rpc ListVpcs(ListVpcsRequest) returns (ListVpcsResponse);
+  rpc DeleteVpc(DeleteVpcRequest) returns (DeleteVpcResponse);
+  rpc GetEffectiveRoutes(GetEffectiveRoutesRequest) returns (GetEffectiveRoutesResponse);
+}
+
+message Vpc {
+  string id = 1;
+  string account_id = 2;
+  string region_id = 3;
+  string name = 4;
+  repeated string cidr_blocks = 5;
+  uint32 vni = 6;
+  string vrf_name = 7;
+  string rd = 8;
+  string export_rt = 9;
+  string state = 10;
+  int32 peering_count = 11;
+  google.protobuf.Timestamp created_at = 12;
+}
+
+message CreateVpcRequest {
+  string name = 1;
+  string region_id = 2;
+  repeated string cidr_blocks = 3;
+}
+
+message GetVpcRequest {
+  string vpc_id = 1;
+}
+
+message ListVpcsRequest {
+  string region_id = 1;
+  string page_token = 2;
+  int32 page_size = 3;
+}
+
+message ListVpcsResponse {
+  repeated Vpc vpcs = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message DeleteVpcRequest {
+  string vpc_id = 1;
+}
+
+message DeleteVpcResponse {}
+
+message GetEffectiveRoutesRequest {
+  string vpc_id = 1;
+}
+
+message EffectiveRoute {
+  string prefix = 1;
+  string peering_id = 2;
+  string peer_vpc_id = 3;
+  string origin = 4;
+  string state = 5;
+  int32 preference = 6;
+}
+
+message GetEffectiveRoutesResponse {
+  repeated EffectiveRoute routes = 1;
+}

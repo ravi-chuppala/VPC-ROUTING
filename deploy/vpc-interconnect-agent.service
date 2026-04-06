@@ -1,0 +1,17 @@
+[Unit]
+Description=VPC Interconnect Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vpc-interconnect-agent
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+Environment=LOG_LEVEL=info
+Environment=CONTROLLER_ADDR=localhost:9090
+
+[Install]
+WantedBy=multi-user.target
