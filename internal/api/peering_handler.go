@@ -292,46 +292,11 @@ func (h *PeeringHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Emit event
 	h.emitEvent(ctx, peering.ID, model.EventPeeringCreated, "Peering request created")
 
-	// For same-account, simulate immediate provisioning → active
-	if sameAccount {
-		h.provisionPeering(ctx, peering, requesterVPC, accepterVPC)
-	}
+	// Provisioning is handled asynchronously by the controller reconciler.
+	// Same-account peerings start in "provisioning" state and will be picked up
+	// on the next reconcile tick. Cross-account peerings wait in "pending_acceptance".
 
 	writeCreated(w, peeringToResponse(peering))
-}
-
-func (h *PeeringHandler) provisionPeering(ctx context.Context, peering *model.Peering, requesterVPC, accepterVPC *model.VPC) {
-	// Install routes for each VPC's CIDRs into the peer's route table
-	for _, cidr := range accepterVPC.CIDRBlocks {
-		h.routes.Upsert(ctx, &model.RouteEntry{
-			Prefix:      cidr,
-			OriginVPCID: accepterVPC.ID,
-			PeeringID:   peering.ID,
-			Origin:      model.RouteOriginDirect,
-			Preference:  model.PreferenceForOrigin(model.RouteOriginDirect),
-			State:       model.RouteStateActive,
-		})
-	}
-	if peering.Direction == model.PeeringDirectionBidirectional || peering.Direction == model.PeeringDirectionAccepterToRequester {
-		for _, cidr := range requesterVPC.CIDRBlocks {
-			h.routes.Upsert(ctx, &model.RouteEntry{
-				Prefix:      cidr,
-				OriginVPCID: requesterVPC.ID,
-				PeeringID:   peering.ID,
-				Origin:      model.RouteOriginDirect,
-				Preference:  model.PreferenceForOrigin(model.RouteOriginDirect),
-				State:       model.RouteStateActive,
-			})
-		}
-	}
-
-	now := time.Now()
-	peering.State = model.PeeringStateActive
-	peering.ProvisionedAt = &now
-	routes, _ := h.routes.ListByPeering(ctx, peering.ID)
-	peering.RouteCount = len(routes)
-	h.peerings.Update(ctx, peering)
-	h.emitEvent(ctx, peering.ID, model.EventPeeringProvisioned, fmt.Sprintf("Peering is now active. %d routes installed.", len(routes)))
 }
 
 func (h *PeeringHandler) Get(w http.ResponseWriter, r *http.Request, peeringID uuid.UUID) {
@@ -423,8 +388,8 @@ func (h *PeeringHandler) Update(w http.ResponseWriter, r *http.Request, peeringI
 		return
 	}
 
-	if peering.State != model.PeeringStateActive {
-		writeError(w, model.ErrInvalidState("peering must be active to update"))
+	if peering.State != model.PeeringStateActive && peering.State != model.PeeringStateProvisioning {
+		writeError(w, model.ErrInvalidState("peering must be active or provisioning to update"))
 		return
 	}
 
@@ -515,14 +480,13 @@ func (h *PeeringHandler) Accept(w http.ResponseWriter, r *http.Request, peeringI
 	}
 
 	peering.State = model.PeeringStateProvisioning
-	h.peerings.Update(ctx, peering)
+	if err := h.peerings.Update(ctx, peering); err != nil {
+		writeError(w, err)
+		return
+	}
 	h.emitEvent(ctx, peeringID, model.EventPeeringAccepted, "Peering accepted")
 
-	requesterVPC, _ := h.vpcs.Get(ctx, peering.RequesterVPCID)
-	if requesterVPC != nil {
-		h.provisionPeering(ctx, peering, requesterVPC, accepterVPC)
-	}
-
+	// Provisioning is handled asynchronously by the controller reconciler.
 	writeSuccess(w, peeringToResponse(peering))
 }
 

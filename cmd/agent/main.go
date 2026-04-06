@@ -6,26 +6,28 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/ravi-chuppala/vpc-routing/internal/agent"
+	"github.com/ravi-chuppala/vpc-routing/internal/config"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	// Initialize netlink manager (in-memory for now; swap for real netlink in production)
-	nl := agent.NewInMemoryNetlink()
+	cfg := config.LoadAgentConfig()
 
-	// Start reconciler
-	reconciler := agent.NewReconciler(nl, 30*time.Second)
+	nl := agent.NewInMemoryNetlink()
+	reconciler := agent.NewReconciler(nl, cfg.ReconcileInterval)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	reconciler.Start(ctx)
 
-	slog.Info("vpc-interconnect-agent started", "reconcile_interval", "30s")
+	slog.Info("vpc-interconnect-agent started",
+		"reconcile_interval", cfg.ReconcileInterval,
+		"controller_addr", cfg.ControllerAddr,
+	)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

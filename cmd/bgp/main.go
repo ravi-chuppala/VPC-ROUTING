@@ -8,19 +8,21 @@ import (
 	"syscall"
 
 	"github.com/ravi-chuppala/vpc-routing/internal/bgp"
+	"github.com/ravi-chuppala/vpc-routing/internal/config"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	config := bgp.Config{
-		LocalASN:        65000,
-		RouterID:        "10.0.0.1",
-		ListenPort:      179,
-		RouteReflectors: []string{"10.0.0.100", "10.0.0.101"},
-	}
+	cfg := config.LoadBGPConfig()
 
-	svc := bgp.NewInMemoryService(config)
+	svc := bgp.NewInMemoryService(bgp.Config{
+		LocalASN:        cfg.LocalASN,
+		RouterID:        cfg.RouterID,
+		ListenPort:      cfg.ListenPort,
+		RouteReflectors: cfg.RouteReflectors,
+	})
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -30,9 +32,9 @@ func main() {
 	}
 
 	slog.Info("vpc-interconnect-bgp started",
-		"asn", config.LocalASN,
-		"router_id", config.RouterID,
-		"peers", len(config.RouteReflectors),
+		"asn", cfg.LocalASN,
+		"router_id", cfg.RouterID,
+		"peers", len(cfg.RouteReflectors),
 	)
 
 	sig := make(chan os.Signal, 1)

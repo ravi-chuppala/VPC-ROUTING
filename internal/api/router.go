@@ -20,7 +20,7 @@ type Router struct {
 }
 
 // NewRouter creates a new API router with all handlers wired.
-func NewRouter(vpcs store.VPCStore, peerings store.PeeringStore, events store.EventStore, routes store.RouteStore, alloc *vni.Allocator) *Router {
+func NewRouter(vpcs store.VPCStore, peerings store.PeeringStore, events store.EventStore, routes store.RouteStore, alloc vni.VNIAllocator) *Router {
 	r := &Router{
 		mux:     http.NewServeMux(),
 		vpc:     NewVPCHandler(vpcs, peerings, alloc),

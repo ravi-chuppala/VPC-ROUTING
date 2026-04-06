@@ -17,10 +17,10 @@ import (
 type VPCHandler struct {
 	vpcs     store.VPCStore
 	peerings store.PeeringStore
-	alloc    *vni.Allocator
+	alloc    vni.VNIAllocator
 }
 
-func NewVPCHandler(vpcs store.VPCStore, peerings store.PeeringStore, alloc *vni.Allocator) *VPCHandler {
+func NewVPCHandler(vpcs store.VPCStore, peerings store.PeeringStore, alloc vni.VNIAllocator) *VPCHandler {
 	return &VPCHandler{vpcs: vpcs, peerings: peerings, alloc: alloc}
 }
 

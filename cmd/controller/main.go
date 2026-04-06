@@ -6,9 +6,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/ravi-chuppala/vpc-routing/internal/bgp"
+	"github.com/ravi-chuppala/vpc-routing/internal/config"
 	"github.com/ravi-chuppala/vpc-routing/internal/controller"
 	"github.com/ravi-chuppala/vpc-routing/internal/store"
 )
@@ -16,17 +16,18 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	// Initialize stores (in-memory for now; swap for PostgreSQL in production)
+	cfg := config.LoadControllerConfig()
+
+	// Initialize stores (in-memory for dev; swap for PostgreSQL via DATABASE_URL)
 	vpcs := store.NewMemoryVPCStore()
 	peerings := store.NewMemoryPeeringStore()
 	events := store.NewMemoryEventStore()
 	routes := store.NewMemoryRouteStore()
 
-	// Initialize BGP service
 	bgpSvc := bgp.NewInMemoryService(bgp.Config{
-		LocalASN:        65000,
-		RouterID:        "10.0.0.1",
-		RouteReflectors: []string{"10.0.0.100"},
+		LocalASN:        cfg.BGP.LocalASN,
+		RouterID:        cfg.BGP.RouterID,
+		RouteReflectors: cfg.BGP.RouteReflectors,
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -34,13 +35,14 @@ func main() {
 
 	bgpSvc.Start(ctx)
 
-	// Start reconciler
-	reconciler := controller.NewReconciler(vpcs, peerings, events, routes, bgpSvc, 10*time.Second)
+	reconciler := controller.NewReconciler(vpcs, peerings, events, routes, bgpSvc, cfg.ReconcileInterval)
 	reconciler.Start(ctx)
 
-	slog.Info("vpc-interconnect-controller started", "reconcile_interval", "10s")
+	slog.Info("vpc-interconnect-controller started",
+		"reconcile_interval", cfg.ReconcileInterval,
+		"bgp_asn", cfg.BGP.LocalASN,
+	)
 
-	// Wait for shutdown signal
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig

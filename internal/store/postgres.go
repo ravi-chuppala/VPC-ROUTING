@@ -151,14 +151,6 @@ func (s *PostgresVPCStore) FindByName(ctx context.Context, accountID uuid.UUID, 
 	return s.Get(ctx, id)
 }
 
-func (s *PostgresVPCStore) CountPeerings(ctx context.Context, vpcID uuid.UUID) (int, error) {
-	var count int
-	err := s.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM peerings WHERE (requester_vpc_id = $1 OR accepter_vpc_id = $1) AND state NOT IN ('deleted', 'rejected', 'expired')`,
-		vpcID).Scan(&count)
-	return count, err
-}
-
 // PostgresPeeringStore implements PeeringStore backed by PostgreSQL.
 type PostgresPeeringStore struct {
 	pool *pgxpool.Pool

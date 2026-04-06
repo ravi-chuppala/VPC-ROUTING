@@ -26,7 +26,6 @@ type VPCStore interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindOverlappingCIDR(ctx context.Context, accountID uuid.UUID, cidrs []netip.Prefix) (*model.VPC, error)
 	FindByName(ctx context.Context, accountID uuid.UUID, regionID, name string) (*model.VPC, error)
-	CountPeerings(ctx context.Context, vpcID uuid.UUID) (int, error)
 }
 
 type PeeringStore interface {

@@ -82,6 +82,27 @@ func (r *Reconciler) Stop() {
 	r.stopOnce.Do(func() { close(r.stopCh) })
 }
 
+// snapshotDesired creates a deep copy of the desired state. Caller must hold r.mu.
+func (r *Reconciler) snapshotDesired() DesiredState {
+	snap := DesiredState{
+		VRFs:   make([]VRFConfig, len(r.desired.VRFs)),
+		Routes: make(map[string][]RouteConfig, len(r.desired.Routes)),
+		ACLs:   make(map[string][]ACLConfig, len(r.desired.ACLs)),
+	}
+	copy(snap.VRFs, r.desired.VRFs)
+	for k, v := range r.desired.Routes {
+		routes := make([]RouteConfig, len(v))
+		copy(routes, v)
+		snap.Routes[k] = routes
+	}
+	for k, v := range r.desired.ACLs {
+		acls := make([]ACLConfig, len(v))
+		copy(acls, v)
+		snap.ACLs[k] = acls
+	}
+	return snap
+}
+
 // RunOnce performs a single reconciliation pass.
 func (r *Reconciler) RunOnce() *ReconcileReport {
 	return r.reconcile()
@@ -99,7 +120,7 @@ type ReconcileReport struct {
 
 func (r *Reconciler) reconcile() *ReconcileReport {
 	r.mu.RLock()
-	desired := r.desired
+	desired := r.snapshotDesired()
 	r.mu.RUnlock()
 
 	report := &ReconcileReport{}

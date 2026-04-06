@@ -110,10 +110,6 @@ func (s *MemoryVPCStore) FindByName(_ context.Context, accountID uuid.UUID, regi
 	return nil, nil
 }
 
-func (s *MemoryVPCStore) CountPeerings(_ context.Context, _ uuid.UUID) (int, error) {
-	return 0, nil // wired via peering store in integration
-}
-
 // MemoryPeeringStore is an in-memory peering store for unit testing.
 type MemoryPeeringStore struct {
 	mu       sync.RWMutex

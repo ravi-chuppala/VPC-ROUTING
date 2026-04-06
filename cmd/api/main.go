@@ -8,37 +8,32 @@ import (
 
 	"github.com/ravi-chuppala/vpc-routing/internal/api"
 	"github.com/ravi-chuppala/vpc-routing/internal/auth"
+	"github.com/ravi-chuppala/vpc-routing/internal/config"
 	"github.com/ravi-chuppala/vpc-routing/internal/store"
 	"github.com/ravi-chuppala/vpc-routing/internal/vni"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
-	// Initialize in-memory stores (swap for PostgreSQL in production)
+	cfg := config.LoadAPIConfig()
+
+	// Initialize stores (in-memory for dev; swap for PostgreSQL via DATABASE_URL)
 	vpcs := store.NewMemoryVPCStore()
 	peerings := store.NewMemoryPeeringStore()
 	events := store.NewMemoryEventStore()
 	routes := store.NewMemoryRouteStore()
 
 	alloc := vni.NewAllocator()
-	alloc.RegisterRegion("us-east-1", 0)
-	alloc.RegisterRegion("us-west-1", 1)
-	alloc.RegisterRegion("eu-west-1", 2)
-
-	router := api.NewRouter(vpcs, peerings, events, routes, alloc)
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	for _, r := range cfg.Regions {
+		alloc.RegisterRegion(r.Name, r.ID)
 	}
 
-	// Wrap router with auth middleware — validates Authorization header on all non-health endpoints
+	router := api.NewRouter(vpcs, peerings, events, routes, alloc)
 	handler := auth.Middleware(router)
 
-	slog.Info("starting vpc-interconnect-api", "port", port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), handler); err != nil {
+	slog.Info("starting vpc-interconnect-api", "port", cfg.Port, "regions", len(cfg.Regions))
+	if err := http.ListenAndServe(fmt.Sprintf(":%s", cfg.Port), handler); err != nil {
 		slog.Error("server failed", "error", err)
 		os.Exit(1)
 	}
