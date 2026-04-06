@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/ravi-chuppala/vpc-routing/internal/api"
+	"github.com/ravi-chuppala/vpc-routing/internal/auth"
 	"github.com/ravi-chuppala/vpc-routing/internal/store"
 	"github.com/ravi-chuppala/vpc-routing/internal/vni"
 )
@@ -33,8 +34,11 @@ func main() {
 		port = "8080"
 	}
 
+	// Wrap router with auth middleware — validates Authorization header on all non-health endpoints
+	handler := auth.Middleware(router)
+
 	slog.Info("starting vpc-interconnect-api", "port", port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), router); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), handler); err != nil {
 		slog.Error("server failed", "error", err)
 		os.Exit(1)
 	}

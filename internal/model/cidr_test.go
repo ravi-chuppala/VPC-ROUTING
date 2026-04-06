@@ -30,7 +30,7 @@ func TestValidateCIDR(t *testing.T) {
 				}
 				return
 			}
-			err = ValidateCIDR(p)
+			_, err = ValidateCIDR(p)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateCIDR(%s) error = %v, wantErr %v", tt.cidr, err, tt.wantErr)
 			}
@@ -109,7 +109,7 @@ func TestValidateCIDRBlocks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cidrs := parsePrefixes(t, tt.cidrs)
-			err := ValidateCIDRBlocks(cidrs)
+			_, err := ValidateCIDRBlocks(cidrs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateCIDRBlocks() error = %v, wantErr %v", err, tt.wantErr)
 			}

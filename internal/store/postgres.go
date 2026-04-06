@@ -65,10 +65,12 @@ func (s *PostgresVPCStore) List(ctx context.Context, accountID uuid.UUID, region
 	query := `SELECT id, account_id, region_id, name, cidr_blocks, vni, vrf_name, rd, export_rt, state, created_at
 		 FROM vpcs WHERE account_id = $1 AND state != 'deleted'`
 	args := []any{accountID}
+	argN := 2
 
 	if regionID != "" {
-		query += " AND region_id = $2"
+		query += fmt.Sprintf(" AND region_id = $%d", argN)
 		args = append(args, regionID)
+		argN++
 	}
 	query += " ORDER BY created_at DESC"
 
@@ -76,7 +78,11 @@ func (s *PostgresVPCStore) List(ctx context.Context, accountID uuid.UUID, region
 	if pageSize <= 0 {
 		pageSize = 50
 	}
-	query += fmt.Sprintf(" LIMIT %d", pageSize)
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+	query += fmt.Sprintf(" LIMIT $%d", argN)
+	args = append(args, pageSize)
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -104,9 +110,15 @@ func (s *PostgresVPCStore) List(ctx context.Context, accountID uuid.UUID, region
 }
 
 func (s *PostgresVPCStore) Delete(ctx context.Context, id uuid.UUID) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE vpcs SET state = 'deleted', deleted_at = $2 WHERE id = $1`, id, time.Now())
-	return err
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE vpcs SET state = 'deleted', deleted_at = $2 WHERE id = $1 AND state != 'deleted'`, id, time.Now())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return model.ErrNotFound("VPC")
+	}
+	return nil
 }
 
 func (s *PostgresVPCStore) FindOverlappingCIDR(ctx context.Context, accountID uuid.UUID, cidrs []netip.Prefix) (*model.VPC, error) {
@@ -187,7 +199,9 @@ func (s *PostgresPeeringStore) Get(ctx context.Context, id uuid.UUID) (*model.Pe
 	}
 	p.Direction = model.PeeringDirection(direction)
 	p.State = model.PeeringState(state)
-	json.Unmarshal(policyJSON, &p.RoutePolicy)
+	if err := json.Unmarshal(policyJSON, &p.RoutePolicy); err != nil {
+		return nil, fmt.Errorf("unmarshal route policy: %w", err)
+	}
 	return p, nil
 }
 
@@ -213,7 +227,11 @@ func (s *PostgresPeeringStore) List(ctx context.Context, accountID uuid.UUID, vp
 	if pageSize <= 0 {
 		pageSize = 50
 	}
-	query += fmt.Sprintf(" LIMIT %d", pageSize)
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+	query += fmt.Sprintf(" LIMIT $%d", argN)
+	args = append(args, pageSize)
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -237,17 +255,26 @@ func (s *PostgresPeeringStore) List(ctx context.Context, accountID uuid.UUID, vp
 }
 
 func (s *PostgresPeeringStore) Update(ctx context.Context, p *model.Peering) error {
-	policyJSON, _ := json.Marshal(p.RoutePolicy)
-	_, err := s.pool.Exec(ctx,
+	policyJSON, err := json.Marshal(p.RoutePolicy)
+	if err != nil {
+		return fmt.Errorf("marshal route policy: %w", err)
+	}
+	_, err = s.pool.Exec(ctx,
 		`UPDATE peerings SET direction = $2, state = $3, route_policy = $4, route_count = $5, provisioned_at = $6, deleted_at = $7 WHERE id = $1`,
 		p.ID, string(p.Direction), string(p.State), policyJSON, p.RouteCount, p.ProvisionedAt, p.DeletedAt)
 	return err
 }
 
 func (s *PostgresPeeringStore) Delete(ctx context.Context, id uuid.UUID) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE peerings SET state = 'deleted', deleted_at = $2 WHERE id = $1`, id, time.Now())
-	return err
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE peerings SET state = 'deleted', deleted_at = $2 WHERE id = $1 AND state != 'deleted'`, id, time.Now())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return model.ErrNotFound("peering")
+	}
+	return nil
 }
 
 func (s *PostgresPeeringStore) FindByVPCs(ctx context.Context, vpcA, vpcB uuid.UUID) (*model.Peering, error) {

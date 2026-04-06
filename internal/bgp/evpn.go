@@ -19,8 +19,8 @@ type EVPNType5Route struct {
 // BuildType5Routes constructs EVPN Type-5 routes for a VPC's CIDRs.
 func BuildType5Routes(vpcID, regionID, accountID string, cidrs []netip.Prefix, vni uint32) []EVPNType5Route {
 	routes := make([]EVPNType5Route, 0, len(cidrs))
-	rd := fmt.Sprintf("%s:%s", regionID, vpcID[:8])
-	rt := fmt.Sprintf("target:%s:%s", accountID[:8], vpcID[:8])
+	rd := fmt.Sprintf("%s:%s", regionID, truncate(vpcID, 8))
+	rt := fmt.Sprintf("target:%s:%s", truncate(accountID, 8), truncate(vpcID, 8))
 
 	for _, cidr := range cidrs {
 		routes = append(routes, EVPNType5Route{
@@ -34,6 +34,14 @@ func BuildType5Routes(vpcID, regionID, accountID string, cidrs []netip.Prefix, v
 		})
 	}
 	return routes
+}
+
+// truncate safely returns up to n characters of s.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }
 
 // RTConfig represents a Route Target import/export configuration change.

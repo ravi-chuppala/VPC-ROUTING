@@ -227,21 +227,33 @@ func (h *PeeringHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Quota check
-	reqCount, _ := h.peerings.CountByVPC(ctx, requesterID)
+	reqCount, err := h.peerings.CountByVPC(ctx, requesterID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	if reqCount >= defaultMaxPeerings {
 		writeError(w, model.ErrQuotaExceeded(fmt.Sprintf("requester VPC has reached peering limit of %d", defaultMaxPeerings)))
 		return
 	}
-	accCount, _ := h.peerings.CountByVPC(ctx, accepterID)
+	accCount, err := h.peerings.CountByVPC(ctx, accepterID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	if accCount >= defaultMaxPeerings {
 		writeError(w, model.ErrQuotaExceeded(fmt.Sprintf("accepter VPC has reached peering limit of %d", defaultMaxPeerings)))
 		return
 	}
 
-	// Parse direction
+	// Parse and validate direction
 	direction := model.PeeringDirectionBidirectional
 	if req.Direction != "" {
 		direction = model.PeeringDirection(req.Direction)
+		if !isValidDirection(direction) {
+			writeError(w, model.ErrInvalidInput("direction must be 'bidirectional', 'requester_to_accepter', or 'accepter_to_requester'"))
+			return
+		}
 	}
 
 	// Parse route policy
@@ -547,6 +559,15 @@ func (h *PeeringHandler) Reject(w http.ResponseWriter, r *http.Request, peeringI
 
 func (h *PeeringHandler) ListRoutes(w http.ResponseWriter, r *http.Request, peeringID uuid.UUID) {
 	ctx := r.Context()
+	peering, err := h.peerings.Get(ctx, peeringID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := h.requirePeeringAuth(ctx, peering); err != nil {
+		writeError(w, err)
+		return
+	}
 	routes, err := h.routes.ListByPeering(ctx, peeringID)
 	if err != nil {
 		writeError(w, err)
@@ -569,6 +590,17 @@ func (h *PeeringHandler) ListRoutes(w http.ResponseWriter, r *http.Request, peer
 
 func (h *PeeringHandler) OverrideRoute(w http.ResponseWriter, r *http.Request, peeringID uuid.UUID) {
 	ctx := r.Context()
+
+	peering, err := h.peerings.Get(ctx, peeringID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := h.requirePeeringAuth(ctx, peering); err != nil {
+		writeError(w, err)
+		return
+	}
+
 	var req OverrideRouteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, model.ErrInvalidInput("invalid JSON body"))
@@ -578,12 +610,6 @@ func (h *PeeringHandler) OverrideRoute(w http.ResponseWriter, r *http.Request, p
 	prefix, err := netip.ParsePrefix(req.Prefix)
 	if err != nil {
 		writeError(w, model.ErrInvalidCIDR(fmt.Sprintf("invalid prefix: %s", req.Prefix)))
-		return
-	}
-
-	peering, err := h.peerings.Get(ctx, peeringID)
-	if err != nil {
-		writeError(w, err)
 		return
 	}
 
@@ -612,7 +638,6 @@ func (h *PeeringHandler) OverrideRoute(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 
-	_ = peering // suppress unused
 	writeSuccess(w, map[string]string{"status": "ok"})
 }
 
@@ -660,15 +685,18 @@ func (h *PeeringHandler) GetEffectiveRoutes(w http.ResponseWriter, r *http.Reque
 			continue
 		}
 		routes, _ := h.routes.ListByPeering(ctx, p.ID)
+		peeringAccepted := 0 // per-peering count for max_prefix evaluation
 		for _, re := range routes {
-			// Apply route policy evaluation
-			decision, reason := model.EvaluatePrefix(p.RoutePolicy, re.Prefix, len(allRoutes))
+			decision, _ := model.EvaluatePrefix(p.RoutePolicy, re.Prefix, peeringAccepted)
 			state := string(re.State)
 			if decision == model.PolicyFiltered {
 				state = string(model.RouteStateFiltered)
 			}
 			if decision == model.PolicyDeny {
-				continue // denied routes are not shown
+				continue
+			}
+			if decision == model.PolicyAccept {
+				peeringAccepted++
 			}
 			allRoutes = append(allRoutes, RouteEntryResponse{
 				Prefix:      re.Prefix.String(),
@@ -678,7 +706,6 @@ func (h *PeeringHandler) GetEffectiveRoutes(w http.ResponseWriter, r *http.Reque
 				NextHop:     re.NextHop.String(),
 				Preference:  re.Preference,
 			})
-			_ = reason
 		}
 	}
 
@@ -693,4 +720,29 @@ func (h *PeeringHandler) emitEvent(ctx context.Context, peeringID uuid.UUID, eve
 		Message:   message,
 		Timestamp: time.Now(),
 	})
+}
+
+func isValidDirection(d model.PeeringDirection) bool {
+	switch d {
+	case model.PeeringDirectionBidirectional,
+		model.PeeringDirectionRequesterToAccepter,
+		model.PeeringDirectionAccepterToRequester:
+		return true
+	}
+	return false
+}
+
+// requirePeeringAuth checks that the caller owns at least one side of the peering.
+func (h *PeeringHandler) requirePeeringAuth(ctx context.Context, peering *model.Peering) error {
+	requesterVPC, _ := h.vpcs.Get(ctx, peering.RequesterVPCID)
+	accepterVPC, _ := h.vpcs.Get(ctx, peering.AccepterVPCID)
+	reqAcctID := uuid.Nil
+	accAcctID := uuid.Nil
+	if requesterVPC != nil {
+		reqAcctID = requesterVPC.AccountID
+	}
+	if accepterVPC != nil {
+		accAcctID = accepterVPC.AccountID
+	}
+	return auth.RequirePeeringAccess(ctx, peering, reqAcctID, accAcctID)
 }

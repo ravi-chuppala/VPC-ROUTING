@@ -22,6 +22,7 @@ type Reconciler struct {
 	desired  DesiredState
 	interval time.Duration
 	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 func NewReconciler(netlink NetlinkManager, interval time.Duration) *Reconciler {
@@ -76,9 +77,9 @@ func (r *Reconciler) Start(ctx context.Context) {
 	}()
 }
 
-// Stop halts the reconciliation loop.
+// Stop halts the reconciliation loop. Safe to call multiple times.
 func (r *Reconciler) Stop() {
-	close(r.stopCh)
+	r.stopOnce.Do(func() { close(r.stopCh) })
 }
 
 // RunOnce performs a single reconciliation pass.
@@ -117,6 +118,17 @@ func (r *Reconciler) reconcile() *ReconcileReport {
 				report.Errors = append(report.Errors, err.Error())
 			} else {
 				report.VRFsCreated++
+			}
+		}
+	}
+
+	// Delete stale VRFs (exist on host but not in desired state)
+	for _, v := range actualVRFs {
+		if !desiredVRFMap[v.Name] {
+			if err := r.netlink.DeleteVRF(v.Name); err != nil {
+				report.Errors = append(report.Errors, err.Error())
+			} else {
+				report.VRFsDeleted++
 			}
 		}
 	}

@@ -54,11 +54,15 @@ const (
 )
 
 func ComputeHealth(p *Peering) PeeringHealth {
-	if p.State != PeeringStateActive {
+	switch p.State {
+	case PeeringStateActive:
+		if p.RouteCount == 0 {
+			return PeeringHealthDegraded
+		}
+		return PeeringHealthHealthy
+	case PeeringStateDegraded:
+		return PeeringHealthDegraded
+	default:
 		return PeeringHealthDown
 	}
-	if p.State == PeeringStateActive && p.RouteCount == 0 {
-		return PeeringHealthDegraded
-	}
-	return PeeringHealthHealthy
 }

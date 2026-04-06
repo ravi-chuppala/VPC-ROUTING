@@ -136,7 +136,7 @@ func (s *MemoryPeeringStore) Get(_ context.Context, id uuid.UUID) (*model.Peerin
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	p, ok := s.peerings[id]
-	if !ok {
+	if !ok || p.State == model.PeeringStateDeleted {
 		return nil, model.ErrNotFound("peering")
 	}
 	clone := *p

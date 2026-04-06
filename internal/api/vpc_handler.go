@@ -96,10 +96,12 @@ func (h *VPCHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		cidrs[i] = p
 	}
-	if err := model.ValidateCIDRBlocks(cidrs); err != nil {
+	normalizedCIDRs, err := model.ValidateCIDRBlocks(cidrs)
+	if err != nil {
 		writeError(w, model.ErrInvalidCIDR(err.Error()))
 		return
 	}
+	cidrs = normalizedCIDRs
 
 	// Check name uniqueness
 	existing, err := h.vpcs.FindByName(ctx, accountID, req.RegionID, req.Name)

@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/ravi-chuppala/vpc-routing/internal/bgp"
@@ -20,6 +21,7 @@ type Reconciler struct {
 	provisioner *Provisioner
 	interval    time.Duration
 	stopCh      chan struct{}
+	stopOnce    sync.Once
 }
 
 func NewReconciler(
@@ -62,9 +64,9 @@ func (r *Reconciler) Start(ctx context.Context) {
 	slog.Info("controller reconciler started", "interval", r.interval)
 }
 
-// Stop halts the reconciliation loop.
+// Stop halts the reconciliation loop. Safe to call multiple times.
 func (r *Reconciler) Stop() {
-	close(r.stopCh)
+	r.stopOnce.Do(func() { close(r.stopCh) })
 }
 
 // ReconcileOnce runs a single reconciliation pass (for testing).
